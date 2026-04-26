@@ -8,16 +8,8 @@ import plotly.express as px
 
 
 
-st.set_page_config(layout="wide", page_title="India Energy Pulse")
+st.set_page_config(layout="wide", page_title="India's Electricity Transition", initial_sidebar_state="collapsed", page_icon="⚡")
 
-# st.markdown("""
-# <style>
-# /* Force all Plotly SVG text to dark */
-# .js-plotly-plot .plotly text {
-#     fill: #1A1A1A !important;
-# }
-# </style>
-# """, unsafe_allow_html=True)
 st.markdown(
     """
     <style>
@@ -236,27 +228,65 @@ st.markdown("""
 # ---------------------------
 # DATA (STAYS EXACTLY THE SAME)
 # ---------------------------
-data = {
-    'Sector': ['Wind Power', 'Solar Power', 'Small Hydro Power', 'Biomass (Bagasse) Cogeneration', 
-               'Biomass(Non-bagasse) Cogeneration', 'Waste to Energy', 'Waste to Energy (Off-grid)', 'Total'],
-    'Cum_2014': [21042.58, 2821.91, 3803.68, 7419.23, 531.82, 90.58, 139.79, 35849.59],
-    '2014-15': [2311.77, 1171.62, 251.68, 295.67, 60.05, 0.00, 9.71, 4100.50],
-    '2015-16': [3423.05, 3130.36, 218.11, 304.85, 59.24, 0.00, 5.69, 7141.30],
-    '2016-17': [5502.37, 5658.63, 106.38, 161.95, 2.20, 23.50, 11.77, 11466.81],
-    '2017-18': [1865.23, 9563.69, 105.95, 519.10, 9.50, 24.22, 5.55, 12093.24],
-    '2018-19': [1480.97, 6750.97, 107.34, 402.70, 12.00, 0.00, 6.58, 8760.56],
-    '2019-20': [2117.79, 6510.06, 90.01, 97.00, 0.00, 9.34, 19.11, 8843.31],
-    '2020-21': [1503.30, 5628.80, 103.65, 173.37, 97.24, 21.00, 20.75, 7548.11],
-    '2021-22': [1110.53, 12760.50, 62.09, 59.69, 0.00, 54.50, 34.66, 14081.97],
-    '2022-23': [2275.55, 12783.80, 95.40, 0.00, 42.40, 25.00, 52.28, 15274.43],
-    '2023-24': [3253.38, 15033.24, 58.95, 0.00, 107.34, 1.60, 30.17, 18484.68],
-    '2024-25': [4151.31, 23832.87, 97.30, 387.76, 0.00, 59.60, 194.81, 28723.65],
-    '2025-26': [5094.68, 37957.90, 70.81, 0.00, 14.20, 0.00, 17.45, 43155.04],
-    'Cum_2026': [56094.84, 150260.72, 5171.36, 9821.32, 1047.85, 324.24, 553.12, 223273.45]
-}
+import pandas as pd
+import requests
+from io import StringIO
+
+url = "https://mnre.gov.in/en/year-wise-achievement/"
+response = requests.get(url)
+response.raise_for_status()
+
+tables = pd.read_html(StringIO(response.text))
+df = tables[0]   # that main table
+
+new_cols = [
+    "Sector",
+    "Cum_2014",
+    "2014-15",
+    "2015-16",
+    "2016-17",
+    "2017-18",
+    "2018-19",
+    "2019-20",
+    "2020-21",
+    "2021-22",
+    "2022-23",
+    "2023-24",
+    "2024-25",
+    "2025-26",
+    "Cum_2026"
+]
+df.columns = new_cols
+
+# Make sure the last row is "Total"
+df.iloc[-1, 0] = "Total"
+
+#Convert all numeric columns to float
+for col in df.columns[1:]:
+    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+# Convert to your exact dict format
+sector_order = [
+    'Wind Power',
+    'Solar Power',
+    'Small Hydro Power',
+    'Biomass (Bagasse) Cogeneration',
+    'Biomass(Non-bagasse) Cogeneration',
+    'Waste to Energy',
+    'Waste to Energy (Off-grid)',
+    'Total'
+]
+
+data = {'Sector': sector_order}
+for year in df.columns[1:]:
+    data[year] = [float(df.loc[df["Sector"] == s, year].iloc[0]) for s in sector_order]
+
+# # Now `data` looks exactly like your example
+# print(data)
 
 df = pd.DataFrame(data)
 years = ['2014','2015','2016','2017','2018','2019','2020','2021','2022','2023','2024','2025','2026']
+# 
 
 def calculate_cumulative(row):
     cum = row['Cum_2014']
@@ -360,6 +390,19 @@ st.write("---")
 # ---------------------------
 st.write("## ⚡ Capacity Composition (2026)")
 
+large_hydro_cap_gw = [40, 42, 42.78, 44.48, 45.29, 45.40, 45.70, 46.21, 46.72, 46.85, 46.93, 47.73, 48.00]
+# 2026 Large‑Hydro capacity (GW → MW)
+large_hydro_2026_mw = large_hydro_cap_gw[12] * 1000   # 48 GW → 48,000 MW
+
+# Append a new row for Large‑Hydro
+new_row = {
+    'Sector': 'Large Hydro',
+    **{col: 0.0 for col in df.columns if col != 'Sector'},  # all addition cols = 0
+    'Cum_2026': large_hydro_2026_mw
+}
+
+df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
 pie_data = df[df['Sector'] != 'Total'][['Sector','Cum_2026']].copy()
 
 fig2 = px.pie(
@@ -388,7 +431,7 @@ st.plotly_chart(fig2, use_container_width=True)
 # ---------------------------
 # FINAL INSIGHT
 # ---------------------------
-st.success("India has rapidly expanded its renewable infrastructure, driven primarily by solar energy. Solar power, wind power, and biomass cogeneration together constitute the major share of India’s renewable energy capacity.")
+st.success("India has rapidly expanded its renewable infrastructure, driven primarily by solar energy. Solar power, wind power, and  Large Hydro together constitute the major share of India’s renewable energy capacity.")
 
 
 
@@ -400,35 +443,210 @@ st.write("## 🗺️ State-wise Renewable Capacity")
 
 import re
 
-raw_text = """1 28 Andhra Pradesh 164.51 4415.78 378.10 134.57 53.16 49.19 615.02 6382.54 774.5 249.42 88.34 7494.80 3290.00 15980.11
-2 12 Arunachal Pradesh 140.61 0 0 0 0 0 0.00 1.27 6.68 0 7.49 15.44 1865.00 2021.05
-3 18 Assam 34.11 0 0 8.00 0 0 8.00 216.26 344.2 0 9.71 570.17 346.00 958.28
-4 10 Bihar 70.70 0 112.50 31.40 0 1.32 145.22 196.06 218 0 21.28 435.34 0 651.26
-5 22 Chhattisgarh 100.90 0 272.09 7.00 0 10.83 289.92 1254.41 167.6 0 390.73 1812.74 120.00 2323.56
-6 30 Goa 0.05 0 0 0 1.94 0 1.94 8.51 71.5 0 1.49 81.50 0 83.49
-7 24 Gujarat 113.30 15642.26 65.30 12.00 7.50 45.05 129.85 20974.68 6881.8 1273.43 173.01 29302.92 1990.00 47178.33
-8 6 Haryana 73.50 0 151.40 125.46 11.20 41.78 329.84 267.76 1188.3 0 1152.32 2608.38 0 3011.72
-9 2 Himachal Pradesh 1013.46 0 0 9.20 0 1.00 10.20 257 66.7 0 34.58 358.28 11421.02 12802.96
-10 1 Jammu & Kashmir 189.93 0 0 5.00 0 0 5.00 2.49 42.2 0 34.79 79.48 3360.00 3634.41
-11 20 Jharkhand 4.05 0 0 19.10 0 1.04 20.14 21 94.9 0 139.5 255.40 210.00 489.59
-12 29 Karnataka 1284.73 8730.14 1868.91 20.20 1.00 26.94 1917.05 9855.78 842.9 358.85 44.11 11101.64 3689.20 26722.76
-13 32 Kerala 276.52 71.52 0 2.27 0 0.23 2.50 340.26 1850.4 0 24.93 2215.59 2008.15 4574.28
-15 23 Madhya Pradesh 123.71 3679.15 92.50 18.85 15.40 32.71 159.46 4990.18 893.1 0 102.04 5985.32 2235.00 12182.64
-16 27 Maharashtra 384.28 5927.21 2907.30 16.40 12.59 63.68 2999.97 12171.3 5442.3 0 2008.57 19622.17 3047.00 31980.63
-17 14 Manipur 5.45 0 0 0 0 0 0.00 0.6 10.6 0 6.32 17.52 105.00 127.97
-18 17 Meghalaya 55.03 0 0 13.80 0 0 13.80 0 0.21 0 4.07 4.28 322.00 395.11
-19 15 Mizoram 45.47 0 0 0 0 0 0.00 22 5.3 0 6.39 33.69 60.00 139.16
-20 13 Nagaland 32.67 0 0 0 0 0 0.00 0 1 0 2.34 3.34 75.00 111.01
-21 21 Odisha 140.63 0 50.40 8.82 0 5.00 64.22 662.52 156.3 0 64.62 883.44 2154.55 3242.84
-22 3 Punjab 176.10 0 299.50 237.79 10.75 34.55 582.59 886.77 581.2 0 116.97 1584.94 1096.30 3439.93
-23 8 Rajasthan 23.85 5349.15 134.15 2.00 74.50 11.77 222.42 36125.95 2090.4 1980 816.27 41012.62 412.50 47020.54
-24 11 Sikkim 55.11 0 0 0 0 0 0.00 0.52 5.12 0 1.92 7.56 2282.00 2344.67
-25 33 Tamil Nadu 123.05 12147.23 969.10 52.05 6.40 27.57 1055.12 11972.82 1532.3 0 74.55 13579.67 2203.20 29108.27
-26 36 Telangana 89.67 128.10 158.10 23.74 45.80 14.47 242.11 4360.49 695.9 0 8.71 5065.10 2405.60 7930.58
-27 16 Tripura 16.01 0 0 0 0 0 0.00 7.09 12.2 0 16.25 35.54 0 51.55
-28 9 Uttar Pradesh 50.60 0 1985.50 184.76 0 159.63 2329.89 3048.33 715.3 0 359.51 4123.14 501.60 7005.23
-29 5 Uttarakhand 233.82 0 72.72 71.92 0 16.85 161.49 541.05 273.71 0 23.13 837.89 4785.35 6018.55
-30 19 West Bengal 98.50 0 300.00 43.52 0 8.34 351.86 240.35 67.13 0 13.14 320.62 1341.20 2112.18"""
+""
+
+import io
+import re
+import requests
+import pdfplumber
+import pandas as pd
+
+# ── Config ─────
+PDF_URL = (
+    "https://cdnbbsr.s3waas.gov.in/"
+    "s3716e1b8c6cd17b771da77391355749f3/uploads/2026/04/20260415955675604.pdf"
+)
+
+# PDF column order (what pdfplumber sees left-to-right):
+PDF_COLS = [
+    "small_hydro", "wind",
+    "bagasse", "nonbagasse", "wte", "wte_offgrid", "bio_total",
+    "gm_solar", "rts", "hybrid", "offgrid_solar", "solar_total",
+    "large_hydro", "total",
+]
+
+# Output column order for raw_text (matches the format you want):
+OUT_COLS = PDF_COLS
+
+# Regex: <int>  <int>  <state name (words/&/spaces)>  <numbers...>
+ROW_RE = re.compile(
+    r"^(\d+)\s+(\d+)\s+([A-Za-z &]+?)\s+([\d.][0-9. ]+)$"
+)
+
+
+# ── Step 1: Download ───
+
+def download_pdf(url: str) -> io.BytesIO:
+    print(f"[1] Downloading PDF …")
+    resp = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+    print(f"    {len(resp.content)/1024:.1f} KB received")
+    return io.BytesIO(resp.content)
+
+
+# ── Step 2: Extract raw text ────
+
+def extract_text(pdf_bytes: io.BytesIO) -> str:
+    print("[2] Extracting text with pdfplumber …")
+    with pdfplumber.open(pdf_bytes) as pdf:
+        text = pdf.pages[0].extract_text(x_tolerance=3, y_tolerance=3)
+    print(f"    {len(text.splitlines())} lines extracted")
+    return text
+
+
+# ── Step 3: Constraint-based token alignment ──
+
+def align_tokens(tokens: list[str], s_no: int, state: str) -> list[float] | None:
+    t = [float(x) for x in tokens]
+    tot = t[-1]
+
+    for lh_present in [True, False]:
+        # Set right_used inside the loop (not before it)
+        if lh_present:
+            if len(t) < 3:
+                continue
+            lh = t[-2]
+            st = t[-3]
+            right_used = 3
+        else:
+            if len(t) < 2:
+                continue
+            lh = 0.0
+            st = t[-2]
+            right_used = 2
+
+        # Now use right_used safely
+        if len(t) < right_used + 1:
+            continue
+
+        left = t[:len(t) - right_used]
+        rem  = tot - lh - st
+        if rem < -0.02:
+            continue
+
+        # --- rest of the function remains unchanged ---
+        # (solar block, bio block, etc.)
+
+        for sol_size in [4, 3, 2]:
+            if len(left) < sol_size:
+                continue
+            sol_block = left[-sol_size:]
+            pre_sol   = left[:-sol_size]
+            if abs(sum(sol_block) - st) > 0.02:
+                continue
+            if not pre_sol:
+                continue
+
+            bio_total_val = pre_sol[-1]
+            pre_bio       = pre_sol[:-1]
+
+            for bio_sub_size in [4, 3, 2, 1, 0]:
+                if len(pre_bio) < bio_sub_size:
+                    continue
+                bio_sub  = pre_bio[-bio_sub_size:] if bio_sub_size > 0 else []
+                pre_bio2 = pre_bio[:-bio_sub_size] if bio_sub_size > 0 else pre_bio
+
+                if bio_sub_size > 0 and abs(sum(bio_sub) - bio_total_val) > 0.02:
+                    continue
+                if bio_sub_size == 0 and abs(bio_total_val) > 0.02:
+                    continue
+
+                if   len(pre_bio2) == 0: sh, wind = 0.0, 0.0
+                elif len(pre_bio2) == 1: sh, wind = pre_bio2[0], 0.0
+                elif len(pre_bio2) == 2: sh, wind = pre_bio2[0], pre_bio2[1]
+                else: continue
+
+                if abs(sh + wind + bio_total_val - rem) > 0.02:
+                    continue
+
+                # Expand bio block → [bagasse, nonbagasse, wte, wte_offgrid]
+                b4 = [0.0] * 4
+                for i, v in enumerate(bio_sub):
+                    b4[i + (4 - bio_sub_size)] = v
+
+                # Expand solar block → [gm_solar, rts, hybrid, offgrid_solar]
+                # hybrid (index 2) is the column most often absent
+                s4 = [0.0] * 4
+                if   sol_size == 4: s4 = list(sol_block)
+                elif sol_size == 3: s4[0], s4[1], s4[3] = sol_block[0], sol_block[1], sol_block[2]
+                elif sol_size == 2: s4[0], s4[3]         = sol_block[0], sol_block[1]
+
+                # Return in PDF column order
+                return [sh, wind] + b4 + [bio_total_val] + s4 + [st, lh, tot]
+
+    return None   # alignment failed
+
+
+# ── Step 4: Parse text → DataFrame ───────────────────────────────────────────
+
+def parse(raw_text: str) -> pd.DataFrame:
+    print("[3] Parsing and aligning rows …")
+    records  = []
+    failed   = []
+
+    for line in raw_text.splitlines():
+        line = line.strip()
+        m    = ROW_RE.match(line)
+        if not m:
+            continue
+
+        s_no     = int(m.group(1))
+        lgd_code = int(m.group(2))
+        state    = m.group(3).strip()
+        tokens   = m.group(4).strip().split()
+
+        aligned = align_tokens(tokens, s_no, state)
+        if aligned is None:
+            failed.append(f"  ✗ Row {s_no} ({state}): could not align {tokens}")
+            continue
+
+        records.append([s_no, lgd_code, state] + aligned)
+
+    if failed:
+        print("  Alignment failures:")
+        print("\n".join(failed))
+
+    print(f"    {len(records)} rows aligned successfully  |  {len(failed)} failures")
+    return pd.DataFrame(records, columns=["s_no", "lgd_code", "state"] + PDF_COLS)
+
+
+# ── Step 5: Build raw_text string ─────────────────────────────────────────────
+
+def to_raw_text(df: pd.DataFrame) -> str:
+    """
+    Format the DataFrame as the raw_text string:
+        s_no  lgd_code  state  large_hydro  small_hydro  wind  ...  total
+    Whole numbers are emitted without decimals (218 not 218.0).
+    """
+    def fmt(v: float) -> str:
+        if v == 0:          return "0"
+        if v == int(v):     return str(int(v))
+        return str(v)
+
+    lines = []
+    for _, row in df.sort_values("s_no").iterrows():
+        parts = (
+            [str(int(row["s_no"])), str(int(row["lgd_code"])), row["state"]]
+            + [fmt(row[c]) for c in OUT_COLS]
+        )
+        lines.append(" ".join(parts))
+    return "\n".join(lines)
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+    
+def maini():
+    # pdf_bytes = download_pdf(PDF_URL)
+    raw_text_pdf = extract_text("state_wise.pdf")
+    df = parse(raw_text_pdf)
+
+    raw_text = to_raw_text(df)
+    return raw_text
+
+
+
+raw_text = maini()
 
 # CLEAN LINES
 lines = raw_text.split("\n")
@@ -508,7 +726,14 @@ fig_bar = px.bar(
     color="Total Capacity",
     color_continuous_scale="YlGn",
     title="State-wise Total Renewable Capacity"
+
 )
+
+fig_bar.update_traces(
+    marker_line_color="lightgreen",   # outline color
+    marker_line_width=1                # thickness of the outline
+)
+
 
 fig_bar.update_layout(
     xaxis_tickangle=45,

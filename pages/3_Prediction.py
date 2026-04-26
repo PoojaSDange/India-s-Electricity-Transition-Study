@@ -27,7 +27,7 @@ st.markdown("""
 # PAGE CONFIG
 # ─────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="India RE Share Model",
+    page_title="India's Electricity Transition",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed",

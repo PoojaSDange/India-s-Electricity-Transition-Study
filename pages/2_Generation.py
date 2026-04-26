@@ -6,7 +6,7 @@ import numpy as np
 
 # from style_loader import load_light_theme
 
-st.set_page_config(page_title="Renewable Energy Dashboard", layout="wide")
+st.set_page_config(page_title="India's Electricity Transition", layout="wide",initial_sidebar_state="collapsed", page_icon="⚡")
 
 st.set_page_config(layout="wide", page_title="India Energy Pulse")
 
@@ -589,19 +589,47 @@ st.markdown("""
 """, unsafe_allow_html=True)
  
 # ─── DATA ─────────────────────────────────────────────────────────────────────
-df = pd.DataFrame({
-    "Year":      ["2015-16","2016-17","2017-18","2018-19","2019-20",
-                  "2020-21","2021-22","2022-23","2023-24","2024-25","2025-26"],
-    "Coal":      [896.3, 944, 986.6, 1022.3, 994.2, 981.44, 1078.58, 1182.1, 1294.85, 1331.87, 1162.11],
-    "Oil & Gas": [47.5, 49.5, 50.6, 50, 48.61, 51.07, 36.13, 24.11, 31.7, 32.02, 24.83],
-    "Nuclear":   [37.4, 37.9, 38.3, 37.8, 46.38, 43.03, 47.11, 45.86, 47.94, 56.68, 50.07],
-    "Hydro":     [121.4, 122.4, 126.1, 134.9, 155.97, 150.3, 151.63, 162.1, 134.05, 148.63, 157.69],
-    "Wind":      [33, 46, 52.7, 62, 64.64, 60.15, 68.64, 71.81, 83.39, 83.35, 100.21],
-    "Solar":     [7.4, 13.5, 25.9, 39.3, 50.1, 60.4, 73.48, 102.01, 115.98, 144.15, 153.91],
-    "Bio Power": [16.95, 14.44, 15.61, 16.75, 14.21, 16.44, 18.32, 18.55, 16.99, 15.94, 14.06],
-    "Small-Hydro":[8.4, 7.9, 7.7, 8.7, 9.37, 10.26, 10.46, 11.17, 9.49, 11.57, 11.02],
-    "Total":     [1168, 1236, 1304, 1372, 1383, 1373, 1484, 1618, 1734, 1824, 1674],
-})
+# Read the Excel file (adjust sheet name/index if needed)
+df_raw = pd.read_excel('power.xlsx')
+
+# Clean and process the data
+def clean_power_data(df):
+    # Replace commas with dots for decimal numbers
+    df['Generation (BU)'] = df['Generation (BU)'].astype(str).str.replace(',', '.')
+    
+    # Convert to numeric (handle non-numeric values)
+    df['Generation (BU)'] = pd.to_numeric(df['Generation (BU)'], errors='coerce')
+    
+    # Filter out NaN values and non-power source rows
+    df = df.dropna(subset=['Generation (BU)'])
+    
+    # Remove YoY Growth Rate rows (they don't have valid source names)
+    invalid_sources = ['YoY Growth Rate(in %)']
+    df = df[~df['Source'].isin(invalid_sources)]
+    
+    # Pivot the data to get sources as columns
+    df_pivot = df.pivot(index='Year', columns='Source', values='Generation (BU)').reset_index()
+    
+    # Reorder columns to match your desired format
+    column_order = ['Year', 'Coal', 'Oil & Gas', 'Nuclear', 'Hydro', 
+                   'Wind', 'Solar', 'Bio Power', 'Small-Hydro', 'Total']
+    
+    # Ensure all columns exist and reorder
+    for col in column_order:
+        if col not in df_pivot.columns:
+            df_pivot[col] = np.nan
+    
+    df_pivot = df_pivot[column_order]
+    
+    # Round to 2 decimal places for consistency
+    numeric_cols = df_pivot.columns[1:]  # All except Year
+    df_pivot[numeric_cols] = df_pivot[numeric_cols].round(2)
+    
+    return df_pivot
+
+# Process the data
+df = clean_power_data(df_raw)
+
  
 renewable     = ["Hydro", "Wind", "Solar", "Bio Power", "Small-Hydro"]
 nonrenewable  = ["Coal", "Oil & Gas", "Nuclear"]
